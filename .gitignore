@@ -1,0 +1,5 @@
+db.sqlite3
+.env
+
+authsystem/__pycache__
+authsystem/migrations/__pycache__
