@@ -1,50 +1,57 @@
 version: '3.9'
 services:
 
-  nginx:
-    build: ./nginx
-    links:
-      - backend
-    depends_on:
-      - backend
-    volumes:
-      - static_volume:/app/server/static
-      - media_volume:/app/server/media
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-
-  db:
-    image: postgres:13
-    ports:
-      - 5432:5432
+      - "8080:8080"
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - "letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.traefik.service=traefik"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.rule=Host(`<HOST NAME>`)"
+    command: 
+      - "--api.insecure=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=< EMAIL >"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    networks:
+      - web
+
+  postgresql:
+    image: postgres:latest
     environment:
-      - "POSTGRES_HOST_AUTH_METHOD=trust"
-
-  backend:
-    build: .
-    depends_on:
-      - db
-      - redis
-    restart: always
-    links:
-      - db
-      - redis
-    command: >
-      sh -c " python manage.py makemigrations &&
-              python manage.py migrate &&
-              python manage.py collectstatic --noinput &&
-              celery -A server worker -l info --detach &&
-              gunicorn server.wsgi:application --bind 0.0.0.0:4000"
+      - POSTGRES_USER=postgresql
+      - POSTGRES_PASSWORD=postgresql
+      - POSTGRES_DB=postgresql
+    restart: unless-stopped
+    networks:
+      - web
     ports:
-      - "4000:4000"
-
-  redis:
-    image: redis:latest 
+      - "5432:5432"
 
 volumes:
-  media_volume:
-  static_volume:
+  letsencrypt:
   postgres_data:
+
+networks:
+  web:
+    external: true
+    ports:
+      - "4000:4000"

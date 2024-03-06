@@ -1,0 +1,49 @@
+version: '3.9'
+services:
+
+  backend:
+    image: <image>
+    container_name: backend
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=myresolver"
+      - "traefik.http.routers.backend.service=backend"
+      - "traefik.http.routers.backend.rule=Host(`< HOST NAME >`) && (PathPrefix(`/api/`) || PathPrefix(`/admin/`) || PathPrefix(`/media/`) || PathPrefix(`/static/`))"
+      - "traefik.http.services.backend.loadbalancer.server.port=4000"
+    command: >
+      sh -c " python manage.py makemigrations &&
+              python manage.py migrate &&
+              python manage.py collectstatic --noinput &&
+              gunicorn server.wsgi:application --bind 0.0.0.0:4000"
+    environment:
+      - SECRET_KEY=a)&tg!@-@liw2+v!_64!v1_o+2r%e3ufl#e!n*_ar5a$q=9n!p
+      - DEBUG=0
+      - DB_NAME=postgresql
+      - DB_USER=postgresql
+      - DB_PASSWORD=postgresql
+      - DB_HOST=postgresql
+      - DB_PORT=5432
+      - EMAIL=management.weblab@bk.ru
+      - EMAIL_HOST=smtp.mail.ru
+      - EMAIL_HOST_PASSWORD=AvW2GXLLWtGvWwtSpL6e
+      - EMAIL_PORT=465
+      - REDIS_PORT=6379
+      - REDIS_HOST=redis
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+    networks:
+      - web
+    ports:
+      - "4000:4000"
+
+volumes:
+  media_volume:
+  static_volume:
+
+networks:
+  web:
+    external: true
